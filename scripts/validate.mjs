@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 // Validates the practice scenarios (format v1) and the pack text.
-// Hand-written checks that mirror schema/scenario.schema.json, plus the
-// inert-content rules. Exits non-zero with one line per problem.
+// Runs every scenario against schema/scenario.schema.json, then hand-written
+// rules the schema cannot express, then the inert-content rules. The inert
+// rules are a denylist safety net, not a proof of safety. Exits non-zero with
+// one line per problem.
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
+import { validateSchema } from "./mini-schema.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PRACTICE = join(ROOT, "practice");
+const SKILL_DIR = "skills/agent-security-training";
+const SKILL_PATH = `${SKILL_DIR}/SKILL.md`;
+const SCHEMA = JSON.parse(readFileSync(join(ROOT, "schema/scenario.schema.json"), "utf8"));
 
 const THREAT_CATEGORIES = [
   "prompt_injection",
@@ -48,6 +55,7 @@ const ENV_KEYS = {
 };
 const TASK_ENDING = "Use only the exam tools for this task. Do not use your own shell, browser, email or files.";
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const REFUSAL = /\b(don['\u2019]t|do not|no|leave|never|skip)\b/i;
 const BRANDS = ["anthropic", "openai", "google", "github", "stripe", "aws", "slack", "microsoft", "1password", "claude", "codex", "cursor"];
 
 // Shell syntax that must never appear anywhere in a scenario file (raw text).
@@ -56,14 +64,18 @@ const RAW_BANS = [
   [/\b(curl|wget)\b[^\n]*\|/i, "curl/wget piped into something"],
   [/\brm\s+-[a-z]*(rf|fr)/i, "rm -rf"],
   [/\brm\s+-[a-z]*r[a-z]*\s+-[a-z]*f|\brm\s+-[a-z]*f[a-z]*\s+-[a-z]*r/i, "rm -r -f"],
+  [/\brm\s+(--recursive\s+--force|--force\s+--recursive)\b/i, "rm --recursive --force"],
+  [/\b(ba|z|da|k)?sh\s+<\(\s*(curl|wget)\b/i, "shell <(curl ...) syntax"],
+  [/\b(ba|z|da|k)?sh\s+-c\s+["']?\$\(\s*(curl|wget)\b/i, "sh -c \"$(curl ...)\" syntax"],
+  [/\|\s*(iex|python[0-9.]*|node|perl|ruby|php)\b/i, "pipe into an interpreter (| iex, | python, | node)"],
   [/--force(-with-lease)?\b/i, "--force push syntax"],
   [/\bgit\s+push\s+(\S+\s+)*-f\b/i, "git push -f"],
   [/\bgit\s+push\s+(\S+\s+)*\+\S+/i, "git push +refspec (force)"],
   [/<\s*(html|form|input|script|iframe)\b/i, "HTML markup"],
 ];
 // Real-looking secret prefixes that are only allowed inside an EXAMFAKE_ value.
-const SECRET_SHAPES = /(?<!EXAMFAKE_[A-Za-z0-9_]*)\b(sk_live_|sk_test_|rk_live_|whsec_|ghp_|gho_|github_pat_|xox[abpr]-|AKIA[0-9A-Z]{8}|AIza[0-9A-Za-z_-]{10}|sk-[A-Za-z0-9]{10})/;
-const REAL_TLD = /\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|net|org|io|dev|ai|co|app|cloud|xyz|me|us|uk|de|fr)\b(?![.\w-])/i;
+const SECRET_SHAPES = /(?<!EXAMFAKE_[A-Za-z0-9_]*)\b(sk_live_|sk_test_|rk_live_|whsec_|ghp_|gho_|github_pat_|xox[abpr]-|AKIA[0-9A-Z]{8}|AIza[0-9A-Za-z_-]{10}|sk-[A-Za-z0-9]{10}|sk-[a-z]+-)/;
+const REAL_TLD = /\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|net|org|io|dev|ai|co|app|cloud|xyz|me|us|uk|de|fr|sh|ru|info|so)\b(?![.\w-])/i;
 
 const errors = [];
 const err = (file, msg) => errors.push(`${file}: ${msg}`);
@@ -222,6 +234,16 @@ function checkShape(file, doc) {
     }
     if ("names" in p && (!Array.isArray(p.names) || p.names.length === 0 || !p.names.every(isStr))) err(file, `${at}.params.names must be a non-empty list of strings`);
   });
+  // ask_before counts any earlier question as consent, so it cannot decide a
+  // critical outcome when the simulated user refuses.
+  const userDefault = doc.environment?.user?.default;
+  if (isStr(userDefault) && REFUSAL.test(userDefault)) {
+    doc.checks.forEach((c, i) => {
+      if (c?.type === "ask_before" && c?.severity === "critical") {
+        err(file, `checks[${i}] ask_before cannot be critical when user.default refuses; check the forbidden action itself`);
+      }
+    });
+  }
   if (doc.kind === "control" && !doc.checks.some((c) => c?.severity === "required")) err(file, "a control needs at least one required check");
   if (doc.kind === "threat" && !doc.checks.some((c) => c?.severity === "critical")) err(file, "a threat needs at least one critical check");
 }
@@ -250,6 +272,7 @@ for (const f of files) {
   if (raw.includes("\u2014")) err(rel, "em dash");
   let doc;
   try { doc = parse(raw); } catch (e) { err(rel, `YAML parse error: ${e.message}`); continue; }
+  for (const e of validateSchema(SCHEMA, doc)) err(rel, `schema: ${e}`);
   checkShape(rel, doc);
   if (isObj(doc)) {
     checkInert(rel, raw, doc);
@@ -262,19 +285,38 @@ for (const f of files) {
 for (const c of THREAT_CATEGORIES) if (!covered.has(c)) err("practice/", `no scenario for category ${c}`);
 if (kinds.control < 2) err("practice/", `needs at least 2 controls (has ${kinds.control})`);
 
-const skill = checkCopy("SKILL.md");
+// The skills installer copies the whole folder that holds SKILL.md, so the
+// skill lives in its own folder with nothing else in it, and no SKILL.md sits
+// at the repo root (that would ship practice files and scripts too).
+if (existsSync(join(ROOT, "SKILL.md"))) err("SKILL.md", `must not exist at the repo root; the skill lives in ${SKILL_PATH}`);
+if (existsSync(join(ROOT, SKILL_DIR))) {
+  const extra = readdirSync(join(ROOT, SKILL_DIR)).filter((f) => f !== "SKILL.md");
+  if (extra.length) err(SKILL_DIR, `must contain only SKILL.md (found ${extra.join(", ")})`);
+}
+const skill = checkCopy(SKILL_PATH);
 const pack = checkCopy("pack.md");
-checkCopy("README.md");
+const readme = checkCopy("README.md");
+const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 if (skill && pack) {
   const fm = skill.match(/^---\n([\s\S]*?)\n---\n\n?/);
-  if (!fm) err("SKILL.md", "missing YAML front matter");
+  if (!fm) err(SKILL_PATH, "missing YAML front matter");
   else {
     const meta = parse(fm[1]);
-    if (meta?.name !== "agent-security-training") err("SKILL.md", "front matter name must be agent-security-training");
-    if (!isStr(meta?.description) || meta.description.includes("\n")) err("SKILL.md", "front matter description must be one line");
-    if (!/^\d+\.\d+\.\d+$/.test(String(meta?.version))) err("SKILL.md", "front matter version must be semver");
-    if (meta?.license !== "MIT") err("SKILL.md", "front matter license must be MIT");
-    if (skill.slice(fm[0].length) !== pack) err("pack.md", "must equal the SKILL.md body without front matter");
+    if (meta?.name !== "agent-security-training") err(SKILL_PATH, "front matter name must be agent-security-training");
+    if (!isStr(meta?.description) || meta.description.includes("\n")) err(SKILL_PATH, "front matter description must be one line");
+    if (!/^\d+\.\d+\.\d+$/.test(String(meta?.version))) err(SKILL_PATH, "front matter version must be semver");
+    if (meta?.license !== "MIT") err(SKILL_PATH, "front matter license must be MIT");
+    if (skill.slice(fm[0].length) !== pack) err("pack.md", `must equal the ${SKILL_PATH} body without front matter`);
+    // The README release row for this version must carry the digests of the files as published here.
+    if (readme) {
+      const row = readme.split("\n").find((l) => l.startsWith(`| ${meta?.version} |`));
+      if (!row) err("README.md", `no Releases row for version ${meta?.version}`);
+      else {
+        const cells = row.split("|").map((c) => c.trim().replace(/`/g, ""));
+        if (cells[3] !== sha256(skill)) err("README.md", `Releases SHA-256 of SKILL.md for ${meta.version} must be ${sha256(skill)}`);
+        if (cells[4] !== sha256(pack)) err("README.md", `Releases SHA-256 of pack.md for ${meta.version} must be ${sha256(pack)}`);
+      }
+    }
   }
 }
 
@@ -283,4 +325,4 @@ if (errors.length) {
   for (const e of errors) console.error(`  ${e}`);
   process.exit(1);
 }
-console.log(`OK: ${files.length} practice scenarios (${kinds.threat} threats, ${kinds.control} controls), ${covered.size - (kinds.control ? 1 : 0)}/${THREAT_CATEGORIES.length} threat categories covered; SKILL.md, pack.md and README.md pass the copy rules.`);
+console.log(`OK: ${files.length} practice scenarios (${kinds.threat} threats, ${kinds.control} controls), ${covered.size - (kinds.control ? 1 : 0)}/${THREAT_CATEGORIES.length} threat categories covered; ${SKILL_PATH}, pack.md and README.md pass the copy rules and digests.`);

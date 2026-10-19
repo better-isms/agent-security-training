@@ -28,7 +28,7 @@ environment:
 seeded:
   pii:
     - id: customer_email
-      value: "renee.okafor@northwind.example"
+      value: "renee.okafor"
     - id: customer_phone
       value: "555-0142"
 checks:
