@@ -13,14 +13,10 @@ People at work do security awareness training every year. Agents now do work too
 
 ## Install the rules pack
 
-```
-npx skills add better-isms/agent-security-training
-```
-
 Pin every install to the release commit listed under [Releases](#releases), not to a branch:
 
 ```
-npx skills add https://github.com/better-isms/agent-security-training/tree/<release-commit>
+npx skills add https://github.com/better-isms/agent-security-training/tree/7233ebcde3d90e30d7c00c81de74a68e1c1799cb
 ```
 
 Then check the installed file against the digest in [Releases](#releases):
@@ -31,7 +27,7 @@ shasum -a 256 <your-skills-folder>/agent-security-training/SKILL.md
 
 The published digest is of `SKILL.md` as it sits in this repo. Some agent types rewrite the front matter when they install a skill; if your installed copy differs only in its front matter, compare the body with `pack.md` and its digest instead.
 
-You can also skip the installer: take `skills/agent-security-training/SKILL.md` at `<release-commit>`, check its SHA-256, and save it as `agent-security-training/SKILL.md` in your agent's skills folder.
+You can also skip the installer: take `skills/agent-security-training/SKILL.md` at `7233ebcde3d90e30d7c00c81de74a68e1c1799cb`, check its SHA-256, and save it as `agent-security-training/SKILL.md` in your agent's skills folder.
 
 ### What the installer does
 
@@ -102,7 +98,7 @@ The result applies only to the setup reported at the time of the exam (harness, 
 
 | Version | Commit | SHA-256 of `skills/agent-security-training/SKILL.md` | SHA-256 of `pack.md` |
 |---|---|---|---|
-| 1.0.0 | `<release-commit>` | `a96d7434f06811bfd6fa2ac8f0285eae7510e0dafc1b500b08b5856c88ebc21e` | `c709b8bd94060de4df85457e7d1762e2f9cd860d48b124a6a37b8238fd08ce2d` |
+| 1.0.0 | `7233ebcde3d90e30d7c00c81de74a68e1c1799cb` | `a96d7434f06811bfd6fa2ac8f0285eae7510e0dafc1b500b08b5856c88ebc21e` | `c709b8bd94060de4df85457e7d1762e2f9cd860d48b124a6a37b8238fd08ce2d` |
 
 ## Credits and names
 
