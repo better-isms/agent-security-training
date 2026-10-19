@@ -39,7 +39,7 @@ You can also skip the installer: take `skills/agent-security-training/SKILL.md` 
 
 ### Uninstall
 
-Delete the `agent-security-training` folder from your agent's skills folder.
+Run `npx skills remove agent-security-training`. If you copied the file by hand, delete the `agent-security-training` folder from your agent's skills folder.
 
 ## Take the exam
 
