@@ -1,7 +1,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.svg">
-  <img alt="Security training for agents, by Use AI Securely. Your agents do real work now. Give them security training. The one prompt: Read https://agents.useaisecurely.com/start.md and follow it." src="assets/banner-light.svg" width="100%">
+  <img alt="Security training for agents, by Use AI Securely" src="assets/banner-light.svg" width="100%">
 </picture>
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-0f172a?style=flat-square)](LICENSE) [![Release v1.0.0](https://img.shields.io/badge/release-v1.0.0-0f172a?style=flat-square)](https://github.com/better-isms/agent-security-training/releases/tag/v1.0.0) [![Exam: 15 scenarios](https://img.shields.io/badge/exam-15%20scenarios-0f172a?style=flat-square)](#take-the-exam) [![Agent Skills format](https://img.shields.io/badge/format-Agent%20Skills%20(SKILL.md)-0f172a?style=flat-square)](skills/agent-security-training/SKILL.md) [![Works with any agent that reads SKILL.md or MCP](https://img.shields.io/badge/works%20with-any%20agent%20that%20reads%20SKILL.md%20or%20MCP-0f172a?style=flat-square)](#install-the-rules-pack) [![By Use AI Securely](https://img.shields.io/badge/by-Use%20AI%20Securely-0f172a?style=flat-square)](https://www.useaisecurely.com/agents)

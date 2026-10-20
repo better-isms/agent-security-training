@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Replays the recorded demo run for the README GIF (assets/demo/demo.gif).
-// Everything printed comes from transcript.md in this folder: the requests
-// that ran, in order, and the result page summary. Sped up.
+// The data printed (requests in order, scenario counts, the result page
+// summary) comes from transcript.md in this folder; the labels around it are
+// the replay's own. Sped up.
 // Render: vhs assets/demo/demo.tape (from the repo root).
 import fs from 'node:fs';
 import path from 'node:path';
